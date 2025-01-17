@@ -15,6 +15,9 @@ struct MealLogView: View {
     @State private var carbohydrates: Double = 0
     @State private var fat: Double = 0
     @State private var caffeine: Double = 0
+    @State private var recognizedFoods: [FoodRecognitionManager.RecognizedFood] = []
+    @State private var showingRecognitionResult = false
+    @State private var isProcessingImage = false
     
     var body: some View {
         NavigationView {
@@ -42,6 +45,12 @@ struct MealLogView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(maxHeight: 200)
+                                .overlay {
+                                    if isProcessingImage {
+                                        ProgressView()
+                                            .background(.ultraThinMaterial)
+                                    }
+                                }
                         } else {
                             Label("添加照片", systemImage: "camera")
                         }
@@ -66,6 +75,8 @@ struct MealLogView: View {
                 Task {
                     if let data = try? await newValue?.loadTransferable(type: Data.self) {
                         selectedImageData = data
+                        // 开始识别
+                        await recognizeFood(from: data)
                     }
                 }
             }
@@ -120,6 +131,26 @@ struct MealLogView: View {
                     })
                 }
             }
+            .sheet(isPresented: $showingRecognitionResult) {
+                FoodRecognitionResultView(
+                    recognizedFoods: $recognizedFoods,
+                    onSave: { foods in
+                        // 将识别结果合并到当前记录
+                        let totalCalories = foods.reduce(0) { $0 + $1.calories }
+                        calories = totalCalories
+                        
+                        // 合并营养成分
+                        protein = foods.reduce(0) { $0 + ($1.protein ?? 0) }
+                        carbohydrates = foods.reduce(0) { $0 + ($1.carbs ?? 0) }
+                        fat = foods.reduce(0) { $0 + ($1.fat ?? 0) }
+                        
+                        // 更新名称
+                        if !foods.isEmpty {
+                            mealName = foods.map { $0.name }.joined(separator: "、")
+                        }
+                    }
+                )
+            }
         }
     }
     
@@ -153,5 +184,19 @@ struct MealLogView: View {
         carbohydrates = 0
         fat = 0
         caffeine = 0
+    }
+    
+    private func recognizeFood(from imageData: Data) async {
+        isProcessingImage = true
+        defer { isProcessingImage = false }
+        
+        do {
+            recognizedFoods = try await FoodRecognitionManager.shared.recognizeFoodInImage(imageData)
+            if !recognizedFoods.isEmpty {
+                showingRecognitionResult = true
+            }
+        } catch {
+            print("Food recognition failed: \(error)")
+        }
     }
 } 
