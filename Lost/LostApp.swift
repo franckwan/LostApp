@@ -7,12 +7,21 @@
 
 import SwiftUI
 import SwiftData
+import HealthKit
 
 @main
 struct LostApp: App {
+    // 将 HealthKit 管理移到单独的类中
+    private let healthKitManager = HealthKitManager.shared
+    
+    init() {
+        // 在初始化时请求 HealthKit 权限
+        healthKitManager.requestAuthorization()
+    }
+    
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Meal.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,8 +34,26 @@ struct LostApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TabView {
+                MealLogView()
+                    .tabItem {
+                        Image(systemName: "plus.circle.fill")
+                        Text("记录")
+                    }
+                
+                HistoryView()
+                    .tabItem {
+                        Image(systemName: "clock.fill")
+                        Text("历史")
+                    }
+                
+                ProfileView()
+                    .tabItem {
+                        Image(systemName: "person.fill")
+                        Text("我的")
+                    }
+            }
+            .modelContainer(sharedModelContainer)
         }
-        .modelContainer(sharedModelContainer)
     }
 }

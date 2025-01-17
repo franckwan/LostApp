@@ -6,5 +6,17 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>需要访问健康数据来同步您的饮食卡路里记录</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>需要写入健康数据来保存您的饮食卡路里记录</string>
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相机来拍摄食物照片</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问照片库来选择食物照片</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>healthkit</string>
+	</array>
 </dict>
 </plist>
