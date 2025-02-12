@@ -24,11 +24,8 @@ struct MealLogView: View {
     NavigationView {
       ZStack {
         Form {
-          Section(header: Text("餐食信息")) {
+          Section(header: Text("基本信息")) {
             TextField("餐食名称", text: $mealName)
-              .onTapGesture {
-                hideKeyboard()
-              }
 
             HStack {
               Text("卡路里")
@@ -37,65 +34,125 @@ struct MealLogView: View {
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
             }
-
-            TextField("备注", text: $notes, axis: .vertical)
-              .lineLimit(3...6)
-              .onTapGesture {
-                hideKeyboard()
-              }
           }
 
-          Section(header: Text("AI识别餐食信息")) {
-            TextField("AI识别餐食信息", text: $notes, axis: .vertical)
+          Section(header: Text("食物描述")) {
+            TextField("请输入食物描述", text: $notes, axis: .vertical)
               .lineLimit(3...6)
-              .onTapGesture {
+
+            VStack(spacing: 0) {  // 使用 VStack 包装按钮
+              Button(action: {
+                // 收起键盘
                 hideKeyboard()
+                // 调用识别方法
+                recognizeTextFood()
+              }) {
+                HStack {
+                  Image(systemName: "wand.and.stars")
+                  Text("AI 识别食物")
+                    .fontWeight(.medium)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(notes.isEmpty ? Color.gray : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
               }
+              .disabled(notes.isEmpty)  // 当文本为空时禁用按钮
+              .buttonStyle(PressableButtonStyle())  // 添加按压效果
+              .padding(.vertical, 8)
+
+              if notes.isEmpty {
+                Text("请先输入食物描述")
+                  .font(.caption)
+                  .foregroundColor(.secondary)
+              }
+            }
           }
 
           Section(header: Text("照片")) {
             PhotosPicker(selection: $selectedItem, matching: .images) {
-              if let selectedImageData,
-                let uiImage = UIImage(data: selectedImageData)
-              {
-                Image(uiImage: uiImage)
-                  .resizable()
-                  .scaledToFit()
-                  .frame(maxHeight: 200)
-                  .contentShape(Rectangle())
-              } else {
-                Label("添加照片", systemImage: "camera")
+              Group {  // 使用 Group 包装内容
+                if let selectedImageData,
+                  let uiImage = UIImage(data: selectedImageData)
+                {
+                  VStack {
+                    Image(uiImage: uiImage)
+                      .resizable()
+                      .scaledToFit()
+                      .frame(maxHeight: 200)
+                      .clipped()
+
+                    Text("点击更换照片")
+                      .font(.caption)
+                      .foregroundColor(.blue)
+                  }
+                  .contentShape(Rectangle())  // 确保整个区域可点击
+                } else {
+                  HStack {
+                    Image(systemName: "camera.fill")
+                    Text("添加照片")
+                  }
                   .frame(maxWidth: .infinity, minHeight: 44)
+                  .background(Color.blue.opacity(0.1))
+                  .foregroundColor(.blue)
+                  .cornerRadius(8)
+                  .contentShape(Rectangle())  // 确保整个区域可点击
+                }
               }
+              .padding(.vertical, 4)  // 添加一些内边距
             }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .padding(.vertical, 8)
+            .buttonStyle(PressableButtonStyle())
+            .frame(maxWidth: .infinity)  // 确保按钮占满整个宽度
           }
 
           Section(header: Text("营养成分")) {
-            Button("添加详细营养信息") {
-              showingNutritionDetails = true
+            Button(action: { showingNutritionDetails = true }) {
+              HStack {
+                Image(systemName: "list.bullet.clipboard")
+                Text("添加详细营养信息")
+                  .fontWeight(.medium)
+              }
+              .frame(maxWidth: .infinity, minHeight: 44)
+              .background(Color.blue)
+              .foregroundColor(.white)
+              .cornerRadius(8)
             }
-            .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
+            .buttonStyle(PressableButtonStyle())  // 添加按压效果
             .padding(.vertical, 8)
+
+            if protein > 0 || carbohydrates > 0 || fat > 0 {
+              VStack(alignment: .leading, spacing: 8) {
+                if protein > 0 {
+                  Text("蛋白质: \(Int(protein))g")
+                }
+                if carbohydrates > 0 {
+                  Text("碳水: \(Int(carbohydrates))g")
+                }
+                if fat > 0 {
+                  Text("脂肪: \(Int(fat))g")
+                }
+              }
+              .font(.subheadline)
+              .foregroundColor(.secondary)
+            }
           }
 
-          Button(action: saveMeal) {
-            Text("保存")
+          Section {
+            Button(action: saveMeal) {
+              HStack {
+                Text("保存")
+                  .fontWeight(.medium)
+              }
               .frame(maxWidth: .infinity)
-              .foregroundColor(.white)
               .padding(.vertical, 12)
+              .background(Color.blue)
+              .foregroundColor(.white)
+              .cornerRadius(8)
+            }
+            .buttonStyle(PressableButtonStyle())  // 添加按压效果
           }
-          .buttonStyle(.plain)
-          .listRowBackground(Color.blue)
-          .contentShape(Rectangle())
-          .listRowInsets(EdgeInsets())
-          .padding(.vertical, 4)
         }
-        
+
         if isProcessingImage {
           Color.black.opacity(0.5)
             .edgesIgnoringSafeArea(.all)
@@ -243,18 +300,61 @@ struct MealLogView: View {
 
   private func recognizeFood(from imageData: Data) async {
     isProcessingImage = true
-    defer { isProcessingImage = false }
 
     do {
+      // 使用新的文本识别方法
       recognizedFoods = try await FoodRecognitionManager.shared.recognizeFoodInImage(imageData)
-      if !recognizedFoods.isEmpty {
-        showingRecognitionResult = true
-      } else {
-        // 当未识别到食物时显示提示框
-        showingAlert = true
+
+      // 确保在主线程更新 UI
+      await MainActor.run {
+        isProcessingImage = false
+        if !recognizedFoods.isEmpty {
+          showingRecognitionResult = true
+        } else {
+          showingAlert = true
+        }
       }
     } catch {
-      print("Food recognition failed: \(error)")
+      // 确保在主线程更新 UI
+      await MainActor.run {
+        isProcessingImage = false
+        print("Food recognition failed: \(error.localizedDescription)")
+        showingAlert = true
+      }
+    }
+  }
+
+  private func recognizeTextFood() {
+    // 检查文本是否为空
+    guard !notes.isEmpty else {
+      showingAlert = true
+      return
+    }
+
+    Task {
+      isProcessingImage = true
+
+      do {
+        // 使用新的文本识别方法
+        recognizedFoods = try await FoodRecognitionManager.shared.recognizeFoodFromText(notes)
+
+        // 确保在主线程更新 UI
+        await MainActor.run {
+          isProcessingImage = false
+          if !recognizedFoods.isEmpty {
+            showingRecognitionResult = true
+          } else {
+            showingAlert = true
+          }
+        }
+      } catch {
+        // 确保在主线程更新 UI
+        await MainActor.run {
+          isProcessingImage = false
+          print("Food recognition failed: \(error)")
+          showingAlert = true
+        }
+      }
     }
   }
 
@@ -262,5 +362,15 @@ struct MealLogView: View {
   private func hideKeyboard() {
     UIApplication.shared.sendAction(
       #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+  }
+}
+
+// 更新按钮样式
+struct PressableButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+      .opacity(configuration.isPressed ? 0.9 : 1.0)
+      .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
   }
 }
